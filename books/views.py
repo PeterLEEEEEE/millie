@@ -29,6 +29,7 @@ class BookDetailView(View):
         book_list = {
             "title": book.book.title,
             "image_url": book.book.image_url,
+            "book_intro": book.book.description,
             "publisher": book.book.publisher.name,
             "publisher_intro": book.book.publisher.introduction,
             "pages": book.book.page,
@@ -38,7 +39,7 @@ class BookDetailView(View):
             "category": book.book.category.values()[0]['name']
         }
         
-        return JsonResponse({"MESSAGE": book_list}, status=200)
+        return JsonResponse({"RESULT": book_list}, status=200)
 
 
 class CommentView(View):
@@ -52,7 +53,6 @@ class CommentView(View):
             "comment": comment.text,
             "written": comment.updated_at.strftime("%Y.%m.%d"),
             "likes": comment.like_count,
-            #"likes": CommentLike.objects.filter(comment_id=comment.id).count()
         }for comment in comments]
         
         return JsonResponse({
