@@ -4,6 +4,7 @@ from django.http.response import JsonResponse
 from django.views         import View
 from django.db.models     import Q
 
+from users.decorators import login_decorator
 from books.models import (
     BookAuthor, 
     BookCategory, 
@@ -12,123 +13,144 @@ from books.models import (
     CommentLike, 
     Book
 )
-from books.utils  import query_debugger
 
 
 # 상세페이지
 class BookDetailView(View):
-    @query_debugger
+
     def get(self, request, book_id):
-        # 
         if not Book.objects.filter(id=book_id).exists():
             return JsonResponse({"MESSAGE": "BOOK DOES NOT EXIST"}, status=404)
-        
+    
         books = BookAuthor.objects.select_related('book', 'author').filter(book_id=book_id)
-        book = books[0]
+        book  = books[0]
 
         book_list = {
-            "title": book.book.title,
-            "image_url": book.book.image_url,
-            "book_intro": book.book.description,
-            "publisher": book.book.publisher.name,
+            "title"          : book.book.title,
+            "image_url"      : book.book.image_url,
+            "book_intro"     : book.book.description,
+            "publisher"      : book.book.publisher.name,
             "publisher_intro": book.book.publisher.introduction,
-            "pages": book.book.page,
-            "publish_date": book.book.publish_date,
-            "authors": [book.author.name for book in books],
-            "authors_intro": [book.author.introduction for book in books],
-            "category": book.book.category.values()[0]['name']
+            "book_contents"  : book.book.book_info.contents,
+            "pages"          : book.book.page,
+            "publish_date"   : book.book.publish_date.strftime("%Y.%m.%d"),
+            "authors"        : [book.author.name for book in books],
+            "authors_intro"  : [book.author.introduction for book in books],
+            "category"       : book.book.category.values()[0]['name']
         }
         
         return JsonResponse({"RESULT": book_list}, status=200)
 
 
 class CommentView(View):
-    @query_debugger
+    # 회원용, 비회원용
+    @login_decorator
     def get(self, request, book_id):
-        comments = Comment.objects.select_related('user').filter(book_id=book_id)
-        
-        comment_list = [{
-            "nickname": comment.user.nickname,
-            "profile_image": comment.user.profile_image_url,
-            "comment": comment.text,
-            "written": comment.updated_at.strftime("%Y.%m.%d"),
-            "likes": comment.like_count,
-        }for comment in comments]
-        
-        return JsonResponse({
-            "comments_count": comments.count(),
-            "comments": comment_list
-        }, status=201)
+        try:
+            comments = Comment.objects.select_related('user').filter(book_id=book_id)
+            if request.user:
+                user_id  = request.user.id
+            
+                comment_list = [{
+                    "nickname"     : comment.user.nickname,
+                    "profile_image": comment.user.profile_image_url,
+                    "comment"      : comment.text,
+                    "comment_id"   : comment.id,
+                    "written"      : comment.updated_at.strftime("%Y.%m.%d"),
+                    "likes"        : comment.like_count,
+                    "liked"        : True if CommentLike.objects.filter(comment_id=comment.id, user_id=user_id).exists() else False,
+                    "is_my_comment": True if comment.user_id == int(user_id) else False
+                }for comment in comments]
+            
+            else:
+                comment_list = [{
+                    "nickname"     : comment.user.nickname,
+                    "profile_image": comment.user.profile_image_url,
+                    "comment"      : comment.text,
+                    "comment_id"   : comment.id,
+                    "written"      : comment.updated_at.strftime("%Y.%m.%d"),
+                    "likes"        : comment.like_count,
+                }for comment in comments]
 
+            return JsonResponse({
+                "comments_count": comments.count(),
+                "comments": comment_list
+            }, status=201)
+
+        except Book.DoesNotExist:
+            return JsonResponse({"MESSAGE": "BOOK DOES NOT EXIST"}, status=404)
+    
+    @login_decorator
     def post(self, request, book_id):
         try:
-            data = json.loads(request.body)
-            user_id = request.GET.get('id', None) # 추후 소셜 로그인 완료시 수정
+            data    = json.loads(request.body)
+            user_id = request.user.id
             
-            Comment.objects.update_or_create(
+            Comment.objects.create(
                 book_id = book_id,
                 user_id = user_id,
-                defaults = {'text': data['text']} 
+                text    = data['text']
             )   
         
-            return JsonResponse({"message": "SUCCESS"}, status=201)
+            return JsonResponse({"MESSAGE": "SUCCESS"}, status=201)
 
-        except KeyError:
-            return JsonResponse({"message": "WRONG FORMAT"}, status=401)
+        except:
+            return JsonResponse({"MESSAGE": "WRONG FORMAT"}, status=401)
 
-    def delete(self, request):
-        user_id = request.user.id
-        comment_id = request.GET.get('id', None)
+    @login_decorator
+    def delete(self, request, book_id):
+        user_id    = request.user.id
+        comment_id = request.GET.get('comment_id', None)
         
         if not Comment.objects.filter(id=comment_id).exists():
-            return JsonResponse({"MESSAGE": "COMMENT DOES NOT EXIST"})
+            return JsonResponse({"MESSAGE": "COMMENT DOES NOT EXIST"}, status=401)
         comment = Comment.objects.get(id=comment_id)
 
         if user_id == comment.user_id:
             comment.delete()
+        else: 
+            return JsonResponse({"MESSAGE": "INVALID USER"}, status=401)
         
         return JsonResponse({"MESSAGE": "SUCCESS"}, status=204)
 
-# class CommentDeleteView(View):
-#     # @login_decorator 
-#     def post(self, request, comment_id):
-        
-#         Comment.objects.filter(id=comment_id).delete()
-
-#         return JsonResponse({"messge": "SUCCESS"}, status=201)
 
 class CommentLikeView(View):
     # 데코레이터로 id 값 가져와야함
-    @query_debugger
+    @login_decorator
     def post(self, request):
         try:
-            comment_id = request.GET.get('comment_id', None)
-            user_id = request.GET.get('id', None)
+            comment_id     = request.GET.get('comment_id', None)
+            user_id        = request.user.id
             target_comment = Comment.objects.get(id=comment_id)
             
+
             if CommentLike.objects.filter(comment_id=comment_id, user_id=user_id).exists():
                 target_comment.like_count -= 1
                 CommentLike.objects.filter(comment_id=comment_id, user_id=user_id).delete()
+            
             else:   
                 CommentLike.objects.create(
                     comment_id = comment_id,
                     user_id = user_id
                 )
                 target_comment.like_count += 1
-            
+                
+
             target_comment.save()
 
-            return JsonResponse({"message": "SUCCESS"}, status=201)
+            return JsonResponse({"MESSAGE": "SUCCESS"}, status=201)
         
         except:
             return JsonResponse({"MESSAGE": "COMMENT DOES NOT EXIST"}, status=404)
 
+
 # 검색창
 class SearchView(View):
-    @query_debugger
+    
     def get(self, request):
         search_target = request.GET.get('Search_Target', '')
-        target = request.GET.get('target', '')
+        target        = request.GET.get('target', '')
+        
         q = Q()
 
         search_filter = {
@@ -144,13 +166,14 @@ class SearchView(View):
             return JsonResponse({"MESSAGE": "BOOK NOT FOUND"},status=404)
 
         books_list = [{
-            "title": book.title,
-            "image": book.image_url,
-            "author": [author.name for author in book.author.all()],
+            "title"  : book.title,
+            "image"  : book.image_url,
+            "book_id": book.id,
+            "author" : [author.name for author in book.author.all()],
         }for book in books]
 
         return JsonResponse({
-            "MESSAGE": books_list,
+            "RESULT"    : books_list,
             "books_count": len(books)
             }, status=200)
 
@@ -158,90 +181,101 @@ class SearchView(View):
 # 검색창 메인페이지(카테고리 별 image 가져오기)
 class SearchMainView(View):
     def get(self, request):
-        categories = Category.objects.all()
-        book = BookCategory.objects.select_related('book', 'category')
-        
-        category_list = [{
-            "image": book.filter(category__name=category.name).first().book.image_url if book.filter(category__name=category.name).exists() else "NO IMAGE",
-            "category": category.name
-        }for category in categories]
+        try:
+            categories = Category.objects.all()
+            book       = BookCategory.objects.select_related('book', 'category')
+            
+            category_list = [{
+                "image"   : book.filter(category__name=category.name).first().book.image_url if book.filter(category__name=category.name).exists() else "NO IMAGE",
+                "category": category.name
+            }for category in categories]
 
-        return JsonResponse({"MESSAGE": category_list}, status=200)
+            return JsonResponse({"RESULT": category_list}, status=200)
+
+        except:
+            return JsonResponse({"MESSAGE": "NO DATA"}, status=404)
 
 
 # 메인페이지 1       
 class NewBooksView(View):
     def get(self, request):
-        '''
-        1) 최신 업데이트 순(order by --> limit: 20)
-        '''
-        OFFSET = request.GET.get('OFFSET', 0)
-        LIMIT = 20
+        
+        OFFSET = 0
+        LIMIT  = request.GET.get('limit', '')
 
-        books = Book.objects.all().order_by('-publish_date')
+        books  = Book.objects.all().order_by('-publish_date')
+
+        if LIMIT == '':
+            LIMIT = len(books)
+        else:
+            LIMIT = int(LIMIT)
 
         book_list = [{
             "title": book.title,
             "image": book.image_url,
             "pages": book.page,
-        }for book in books][OFFSET:OFFSET+LIMIT]
+        }for book in books]
 
-        return JsonResponse({"BOOKS": book_list}, status=200)
+        return JsonResponse({"RESULT": book_list[OFFSET:LIMIT]}, status=200)
 
 
 # 메인 페이지 2
 class MovieRecommend(View):
-    @query_debugger
     def get(self, request):
-        # annotation(like=Max(likes))??
-        # 책은 날짜 순으로 가져옴 .first()?
-        '''
-        return: 
-            book_image
-            most_liked_comment, commenter's nickname
-            order_by publish_date
-        '''
-        OFFSET = 0
-        LIMIT = request.GET.get('limit', 20)
-        books = Book.objects.prefetch_related('comment_set').order_by('-publish_date')
         
-        book_list = [{
-            "book_image": book.image_url,
-            "title": book.title,
-        #     "nickname": book.comment_set.order_by('like_count').first().user.nickname if Comment.objects.filter(book_id=book.id).exists() else "NONE", 
-        #     "user_image": book.comment_set.order_by('like_count').first().user.profile_image_url if Comment.objects.filter(book_id=book.id).exists() else "NONE", 
-        #     "comment": book.comment_set.order_by('like_count').first().text if Comment.objects.filter(book_id=book.id).exists() else "NONE",
-        }for book in books][OFFSET:LIMIT]
+        OFFSET = 0
+        LIMIT  = request.GET.get('limit', '')
+        books  = Book.objects.prefetch_related('comment_set').order_by('-publish_date')
+        
+        if LIMIT == '':
+            LIMIT = len(books)
+        else:
+            LIMIT = int(LIMIT)
 
-        return JsonResponse({"book": book_list}, status=200)
+        book_list = [{
+            "book_image"  : book.image_url,
+            "title"       : book.title,
+            "publish_date": book.publish_date.strftime("%Y.%m.%d"),
+            "nickname"    : book.comment_set.order_by('like_count').first().user.nickname if Comment.objects.filter(book_id=book.id).exists() else "NONE", 
+            "user_image"  : book.comment_set.order_by('like_count').first().user.profile_image_url if Comment.objects.filter(book_id=book.id).exists() else "NONE", 
+            "comment"     : book.comment_set.order_by('like_count').first().text if Comment.objects.filter(book_id=book.id).exists() else "NONE",
+        }for book in books]
+
+        return JsonResponse({"RESULT": book_list[OFFSET:LIMIT]}, status=200)
+
 
 # 메인페이지 #3
 class BookPublisherView(View):
     def get(self, request):
-        publisher = request.GET.get('publisher', '')
+        publisher = request.GET.get('search', '')
+        LIMIT = request.GET.get('limit', '')
         OFFSET = 0
-        LIMIT = 10
 
         q = Q()
 
         if publisher:
             q = Q(publisher__name=publisher)
         
-        books = Book.objects.select_related('publisher').filter(q)
+        books  = Book.objects.select_related('publisher').filter(q)
+
+        if LIMIT == '':
+            LIMIT = len(books)
+        else:
+            LIMIT = int(LIMIT)
 
         publish_list = [{
             "book_title": book.title,
             "book_image": book.image_url,
         }for book in books]
         
-        return JsonResponse({"MESSAGE":publish_list}, status=200)
+        return JsonResponse({"RESULT":publish_list[OFFSET:LIMIT]}, status=200)
 
 
 # 메인페이지 #4
 class BookGenreView(View):
-    @query_debugger
+
     def get(self, request):
-        genre = request.GET.get('genre', '')
+        genre = request.GET.get('search', '')
         LIMIT = request.GET.get('limit', '')
         OFFSET = 0
 
@@ -254,13 +288,15 @@ class BookGenreView(View):
         
         if LIMIT == '':
             LIMIT = len(books)
-        
+        else:
+            LIMIT = int(LIMIT)
+
         book_list = [{
-            "title": book.title,
-            "author": book.author.values()[0]['name'],
-            "image": book.image_url,
-        }for book in books][OFFSET:LIMIT]
+            "title" : book.title,
+            "author": [author.name for author in book.author.all()],
+            "image" : book.image_url,
+        }for book in books]
             
-        return JsonResponse({"Books": book_list}, status=201)
+        return JsonResponse({"RESULT": book_list[OFFSET:LIMIT]}, status=201)
 
 

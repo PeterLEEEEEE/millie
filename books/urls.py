@@ -22,7 +22,9 @@ from books.views import (
     BookDetailView,
     MovieRecommend,
     SearchMainView,
-    SearchView
+    SearchView,
+    BookPublisherView,
+    NewBooksView
 )
 
 urlpatterns = [
@@ -33,5 +35,6 @@ urlpatterns = [
     path('/search', SearchView.as_view()),
     path('/search/Main', SearchMainView.as_view()),
     path('/recommend', MovieRecommend.as_view()),
-    # path('/<int:comment_id>/comment-delete', CommentDeleteView.as_view()),
+    path('/publisher',BookPublisherView.as_view()),
+    path('/new',NewBooksView.as_view()),
 ]
