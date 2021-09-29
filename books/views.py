@@ -47,7 +47,7 @@ class CommentView(View):
     @login_decorator
     def get(self, request, book_id):
        
-        if not Book.objects.filter(book_id=book_id).exists():
+        if not Book.objects.filter(id=book_id).exists():
             return JsonResponse({"MESSAGE": "BOOK DOES NOT EXIST"}, status=404)
         
         comments = Comment.objects.select_related('user').filter(book_id=book_id)
