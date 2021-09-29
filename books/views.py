@@ -266,8 +266,8 @@ class BookPublisherView(View):
             LIMIT = int(LIMIT)
 
         publish_list = [{
-            "book_title": book.title,
-            "book_image": book.image_url,
+            "title": book.title,
+            "image": book.image_url,
             "book_id"   : book.id,
             "author" : [author.name for author in book.author.all()],
         }for book in books]
