@@ -211,9 +211,10 @@ class NewBooksView(View):
             LIMIT = int(LIMIT)
 
         book_list = [{
-            "title": book.title,
-            "image": book.image_url,
-            "pages": book.page,
+            "book_id": book.id,
+            "title"  : book.title,
+            "image"  : book.image_url,
+            "author" : [author.name for author in book.author.all()],
         }for book in books]
 
         return JsonResponse({"RESULT": book_list[OFFSET:LIMIT]}, status=200)
@@ -234,6 +235,7 @@ class MovieRecommend(View):
 
         book_list = [{
             "book_image"  : book.image_url,
+            "book_id"     : book.id,
             "title"       : book.title,
             "publish_date": book.publish_date.strftime("%Y.%m.%d"),
             "nickname"    : book.comment_set.order_by('like_count').first().user.nickname if Comment.objects.filter(book_id=book.id).exists() else "NONE", 
@@ -266,6 +268,8 @@ class BookPublisherView(View):
         publish_list = [{
             "book_title": book.title,
             "book_image": book.image_url,
+            "book_id"   : book.id,
+            "author" : [author.name for author in book.author.all()],
         }for book in books]
         
         return JsonResponse({"RESULT":publish_list[OFFSET:LIMIT]}, status=200)
@@ -292,6 +296,7 @@ class BookGenreView(View):
             LIMIT = int(LIMIT)
 
         book_list = [{
+            "book_id": book.id,
             "title" : book.title,
             "author": [author.name for author in book.author.all()],
             "image" : book.image_url,
