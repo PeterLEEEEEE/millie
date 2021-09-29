@@ -163,7 +163,7 @@ class SearchView(View):
         books = Book.objects.filter(search_filter[search_target]).prefetch_related('author', 'category').distinct()
 
         if not books:
-            return JsonResponse({"MESSAGE": "BOOK NOT FOUND"},status=404)
+            return JsonResponse({"RESULT": []},status=200)
 
         books_list = [{
             "title"  : book.title,
