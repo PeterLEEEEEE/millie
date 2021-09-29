@@ -46,39 +46,42 @@ class CommentView(View):
     # 회원용, 비회원용
     @login_decorator
     def get(self, request, book_id):
-        try:
-            comments = Comment.objects.select_related('user').filter(book_id=book_id)
-            if request.user:
-                user_id  = request.user.id
-            
-                comment_list = [{
-                    "nickname"     : comment.user.nickname,
-                    "profile_image": comment.user.profile_image_url,
-                    "comment"      : comment.text,
-                    "comment_id"   : comment.id,
-                    "written"      : comment.updated_at.strftime("%Y.%m.%d"),
-                    "likes"        : comment.like_count,
-                    "liked"        : True if CommentLike.objects.filter(comment_id=comment.id, user_id=user_id).exists() else False,
-                    "is_my_comment": True if comment.user_id == int(user_id) else False
-                }for comment in comments]
-            
-            else:
-                comment_list = [{
-                    "nickname"     : comment.user.nickname,
-                    "profile_image": comment.user.profile_image_url,
-                    "comment"      : comment.text,
-                    "comment_id"   : comment.id,
-                    "written"      : comment.updated_at.strftime("%Y.%m.%d"),
-                    "likes"        : comment.like_count,
-                }for comment in comments]
-
-            return JsonResponse({
-                "comments_count": comments.count(),
-                "comments": comment_list
-            }, status=201)
-
-        except Book.DoesNotExist:
+       
+        if not Book.objects.filter(book_id=book_id).exists():
             return JsonResponse({"MESSAGE": "BOOK DOES NOT EXIST"}, status=404)
+        
+        comments = Comment.objects.select_related('user').filter(book_id=book_id)
+        
+        if request.user:
+            user_id  = request.user.id
+        
+            comment_list = [{
+                "nickname"     : comment.user.nickname,
+                "profile_image": comment.user.profile_image_url,
+                "comment"      : comment.text,
+                "comment_id"   : comment.id,
+                "written"      : comment.updated_at.strftime("%Y.%m.%d"),
+                "likes"        : comment.like_count,
+                "liked"        : True if CommentLike.objects.filter(comment_id=comment.id, user_id=user_id).exists() else False,
+                "is_my_comment": True if comment.user_id == int(user_id) else False
+            }for comment in comments]
+        
+        else:
+            comment_list = [{
+                "nickname"     : comment.user.nickname,
+                "profile_image": comment.user.profile_image_url,
+                "comment"      : comment.text,
+                "comment_id"   : comment.id,
+                "written"      : comment.updated_at.strftime("%Y.%m.%d"),
+                "likes"        : comment.like_count,
+            }for comment in comments]
+
+        return JsonResponse({
+            "comments_count": comments.count(),
+            "comments": comment_list
+        }, status=201)
+
+        
     
     @login_decorator
     def post(self, request, book_id):
@@ -104,6 +107,7 @@ class CommentView(View):
         
         if not Comment.objects.filter(id=comment_id).exists():
             return JsonResponse({"MESSAGE": "COMMENT DOES NOT EXIST"}, status=401)
+        
         comment = Comment.objects.get(id=comment_id)
 
         if user_id == comment.user_id:
@@ -135,14 +139,14 @@ class CommentLikeView(View):
                 )
                 target_comment.like_count += 1
                 
-
             target_comment.save()
 
             return JsonResponse({"MESSAGE": "SUCCESS"}, status=201)
         
-        except:
+        except Comment.DoesNotExist:
             return JsonResponse({"MESSAGE": "COMMENT DOES NOT EXIST"}, status=404)
-
+        except:
+            return JsonResponse({"MESSAGE": "WRONG FORMAT"}, status=401) 
 
 # 검색창
 class SearchView(View):
