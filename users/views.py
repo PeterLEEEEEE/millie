@@ -8,7 +8,7 @@ from django.conf import settings
 
 from my_settings import ALGORITHM
 from .models import Platform, User
-
+from libraries.models import Library
 
 class SocialLoginView(View):
     def post(self, request):
@@ -37,7 +37,13 @@ class SocialLoginView(View):
                 profile_image_url = profile_image_url,
                 platform_id       = platform.id
                 )
-        
+
+            user_id = User.objects.get(social_id=kakao_id).id
+            Library.objects.create(
+                user_id = user_id
+            )
+
+
             token = jwt.encode({"id" : user.id}, settings.SECRET_KEY, algorithm = ALGORITHM)
 
             return JsonResponse({"message" : "SUCCESS", "access_token" : token}, status = 200)
