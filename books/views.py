@@ -81,8 +81,7 @@ class CommentView(View):
             "comments": comment_list
         }, status=201)
 
-        
-    
+
     @login_decorator
     def post(self, request, book_id):
         try:
@@ -209,7 +208,7 @@ class NewBooksView(View):
 
         books  = Book.objects.all().order_by('-publish_date')
 
-        if LIMIT == '':
+        if LIMIT == '' or int(LIMIT) >= len(books):
             LIMIT = len(books)
         else:
             LIMIT = int(LIMIT)
@@ -232,7 +231,7 @@ class MovieRecommend(View):
         LIMIT  = request.GET.get('limit', '')
         books  = Book.objects.prefetch_related('comment_set').order_by('-publish_date')
         
-        if LIMIT == '':
+        if LIMIT == '' or int(LIMIT) >= len(books):
             LIMIT = len(books)
         else:
             LIMIT = int(LIMIT)
@@ -242,9 +241,9 @@ class MovieRecommend(View):
             "book_id"     : book.id,
             "title"       : book.title,
             "publish_date": book.publish_date.strftime("%Y.%m.%d"),
-            "nickname"    : book.comment_set.order_by('like_count').first().user.nickname if Comment.objects.filter(book_id=book.id).exists() else "NONE", 
-            "user_image"  : book.comment_set.order_by('like_count').first().user.profile_image_url if Comment.objects.filter(book_id=book.id).exists() else "NONE", 
-            "comment"     : book.comment_set.order_by('like_count').first().text if Comment.objects.filter(book_id=book.id).exists() else "NONE",
+            "nickname"    : book.comment_set.order_by('-like_count').first().user.nickname if Comment.objects.filter(book_id=book.id).exists() else "NONE", 
+            "user_image"  : book.comment_set.order_by('-like_count').first().user.profile_image_url if Comment.objects.filter(book_id=book.id).exists() else "NONE", 
+            "comment"     : book.comment_set.order_by('-like_count').first().text if Comment.objects.filter(book_id=book.id).exists() else "NONE",
         }for book in books]
 
         return JsonResponse({"RESULT": book_list[OFFSET:LIMIT]}, status=200)
@@ -264,7 +263,7 @@ class BookPublisherView(View):
         
         books  = Book.objects.select_related('publisher').filter(q)
 
-        if LIMIT == '':
+        if LIMIT == '' or int(LIMIT) >= len(books):
             LIMIT = len(books)
         else:
             LIMIT = int(LIMIT)
@@ -294,7 +293,7 @@ class BookGenreView(View):
 
         books = Book.objects.filter(q).prefetch_related('author')
         
-        if LIMIT == '':
+        if LIMIT == '' or int(LIMIT) >= len(books):
             LIMIT = len(books)
         else:
             LIMIT = int(LIMIT)
