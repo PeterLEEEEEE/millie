@@ -39,9 +39,11 @@ class SocialLoginView(View):
                 )
 
             user_id = User.objects.get(social_id=kakao_id).id
-            Library.objects.create(
-                user_id = user_id
-            )
+            
+            if not Library.objects.filter(user_id=kakao_id).exists():
+                Library.objects.create(
+                    user_id = user_id
+                )
 
 
             token = jwt.encode({"id" : user.id}, settings.SECRET_KEY, algorithm = ALGORITHM)
