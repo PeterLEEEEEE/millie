@@ -20,7 +20,7 @@ class LibraryView(View):    # [branch]feature/library
             if not shelf_name:
                 return JsonResponse({"MESSAGE": "INPUT ERROR"}, status=404)
 
-            if Shelf.objects.filter(name=shelf_name).exists():
+            if Shelf.objects.filter(library_id=user_library.id, name=shelf_name).exists():
                 return JsonResponse({"MESSAGE": "ALREADY EXISTED SHELF"}, status=404)
 
             Shelf.objects.create(
